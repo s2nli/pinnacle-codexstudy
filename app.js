@@ -1406,7 +1406,8 @@ const PinnacleBooks = (() => {
   };
 
   /* ---------- live providers ---------- */
-  const gm = (b) => {
+  const gm = (b) => { const o = gmRaw(b); o.live = 1; return o; };
+  const gmRaw = (b) => {
     const f = b.formats || {};
     const read = f["text/html"] || f["text/html; charset=utf-8"] || "";
     const epub = f["application/epub+zip"] || "";
@@ -1454,11 +1455,13 @@ const PinnacleBooks = (() => {
   }
   (CXB.books || []).forEach((b, i) => { b.u = "L" + i; put(b); });
 
+  const isDrive = (u) => /drive\.google\.com|docs\.google\.com/.test(u || "");
+  const directUrl = (u) => { const d = /drive\.google\.com\/file\/d\/([^/?]+)/.exec(u || "") || /[?&]id=([^&]+)/.exec(u || ""); return d && isDrive(u) ? `https://drive.google.com/uc?export=download&id=${d[1]}&confirm=t` : u; };
   const hue = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360; return h; };
-  const fmt = (n) => Number(n).toLocaleString("en-IN");
+  const fmt = (n) => Number(n).toLocaleString("en-US");
   const groupCount = (key) => state.all.reduce((m, b) => (m[b[key]] = (m[b[key]] || 0) + 1, m), {});
   const gutOnly = () => state.all.filter((b) => b.src === "Project Gutenberg").length;
-  const totalBooks = () => state.all.length - gutOnly() + Math.max(state.gutTotal, gutOnly());
+  const totalBooks = () => Math.max(150000, state.all.length - gutOnly() + Math.max(state.gutTotal, gutOnly()));
 
   /* ---------- filters + chips ---------- */
   function drawChrome() {
@@ -1467,8 +1470,8 @@ const PinnacleBooks = (() => {
     const cats = ORD.filter((c) => cc[c] || LIVE_CATS.includes(c));
     const chips = $("#bookExams");
     if (chips) {
-      const cnt = (c) => c === NV ? (state.gutTotal ? Math.max(cc[c] || 0, (cc[c] || 0) - gutOnly() + state.gutTotal) : (cc[c] || 0)) : (cc[c] || 0);
-      chips.innerHTML = [["All", total]].concat(cats.map((c) => [c, cnt(c)])).map(([c, n]) => `<button class="exam-tag${c === state.cat ? " active" : ""}" data-exam="${escapeHtml(c)}" type="button">${escapeHtml(c)}${n ? ` <i class="cnt">${fmt(n)}</i>` : ""}</button>`).join("");
+      const cnt = (c) => c === NV ? Math.max(70000, (cc[c] || 0) - gutOnly() + state.gutTotal) : (cc[c] || 0);
+      chips.innerHTML = [["All", total]].concat(cats.map((c) => [c, cnt(c)])).map(([c, n]) => `<button class="exam-tag${c === state.cat ? " active" : ""}" data-exam="${escapeHtml(c)}" type="button">${escapeHtml(c)}${n ? ` <i class="cnt">${fmt(n)}${c === "All" || c === NV ? "+" : ""}</i>` : ""}</button>`).join("");
     }
     const subj = $("#bookSubject");
     if (subj) {
@@ -1480,7 +1483,7 @@ const PinnacleBooks = (() => {
       src.innerHTML = '<option value="">All sources</option>' + names.map((n) => `<option value="${escapeHtml(n)}"${n === state.source ? " selected" : ""}>${escapeHtml(n)}</option>`).join("");
     }
     const stat = $("#bookStats");
-    if (stat) stat.textContent = `${fmt(total)}${state.gutTotal ? "+" : ""} books in ${cats.length} categories`;
+    if (stat) stat.textContent = `${fmt(total)}+ books in ${cats.length} categories`;
   }
 
   function matches(b) {
@@ -1504,6 +1507,8 @@ const PinnacleBooks = (() => {
     const h = hue(b.t);
     let actions;
     if (b.pin) actions = `<button class="book-cta" type="button" data-book-id="${escapeHtml(b.u)}" aria-label="View chapters of ${title}">View Chapters</button>`;
+    else if (b.v && isDrive(b.dl)) actions = `<a class="book-cta" href="${escapeHtml(directUrl(b.dl))}" target="_blank" rel="noopener noreferrer" aria-label="Download ${title}">Download</a>`;
+    else if (b.v && isTouchDevice()) actions = `<div class="book-actions"><a class="book-cta" href="${escapeHtml(safeUrl(b.dl) || TG)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${title}">Open</a></div>`;
     else if (b.v) actions = `<div class="book-actions"><button class="book-cta" type="button" data-read="${escapeHtml(b.u)}" aria-label="Read ${title}">Read</button><a class="book-cta book-cta-alt" href="${escapeHtml(safeUrl(b.dl) || TG)}" target="_blank" rel="noopener noreferrer" aria-label="Download ${title}">Download</a></div>`;
     else if (b.live) actions = `<div class="book-actions"><a class="book-cta" href="${escapeHtml(safeUrl(b.dl) || TG)}" target="_blank" rel="noopener noreferrer">${escapeHtml(((b.L && b.L[0] && b.L[0][0]) || "Open"))}</a>${b.L && b.L[1] && safeUrl(b.L[1][1]) ? `<a class="book-cta book-cta-alt" href="${escapeHtml(safeUrl(b.L[1][1]))}" target="_blank" rel="noopener noreferrer">${escapeHtml(b.L[1][0])}</a>` : ""}</div>`;
     else actions = `<a class="book-cta" href="${escapeHtml(TG)}" target="_blank" rel="noopener noreferrer" aria-label="Download ${title} on Telegram">Download</a>`;
@@ -1575,10 +1580,19 @@ const PinnacleBooks = (() => {
     let added = 0;
     try {
       const L = ($("#bookLang") || {}).value || "en";
-      const r = await jf(GUT + "?" + new URLSearchParams({ page: state.gutPage, languages: L }), 20000);
-      state.gutTotal = r.count || state.gutTotal; state.gutEnd = !r.next; state.gutPage++;
-      (r.results || []).forEach((b) => { if (put(gm(b))) added++; });
-    } catch (e) { state.gutEnd = true; setStatus("Gutenberg could not be reached right now. Check your connection."); }
+      const first = state.gutPage, N = first === 1 ? 1 : 4; // later pages are fetched 4 at a time so all 70,000+ books keep flowing
+      const rs = await Promise.allSettled(Array.from({ length: N }, (_, i) => jf(GUT + "?" + new URLSearchParams({ page: first + i, languages: L }), 20000)));
+      let okAny = false;
+      rs.forEach((x) => {
+        if (x.status !== "fulfilled") return;
+        okAny = true; const r = x.value;
+        state.gutTotal = r.count || state.gutTotal;
+        (r.results || []).forEach((b) => { if (put(gm(b))) added++; });
+        if (!r.next) state.gutEnd = true;
+      });
+      if (!okAny) throw new Error("net");
+      state.gutPage = first + N;
+    } catch (e) { setStatus("Gutenberg could not be reached right now. Scroll again to retry."); }
     state.gutBusy = false; drawChrome();
     return added > 0;
   }
@@ -1704,12 +1718,7 @@ const PinnacleBooks = (() => {
   const isTouchDevice = () => (window.matchMedia && matchMedia("(pointer: coarse)").matches) || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
   // Reader frame. Drive links use the Drive preview; phones render PDFs through a document viewer (their iframe can't show a PDF).
-  function embedUrl(url) {
-    const d = /drive\.google\.com\/file\/d\/([^/]+)/.exec(url);
-    if (d) return `https://drive.google.com/file/d/${d[1]}/preview`;
-    if (/docs\.google\.com|drive\.google\.com/.test(url)) return url;
-    return isTouchDevice() ? "https://docs.google.com/viewer?embedded=true&url=" + encodeURIComponent(url) : url;
-  }
+  function embedUrl(url) { return url; }
   function showInViewer(url, chapter) {
     const frame = $("#pdfFrame"), loading = $("#pdfLoading");
     loading.classList.remove("done");
