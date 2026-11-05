@@ -1296,15 +1296,25 @@ function setupViewRouting() {
 }
 
 /* =====================================================================
-   Pinnacle E-Books
+   E-Books Library: Bunny, Pinnacle, Study Bison, PrepBooks, RCXE, Ebooks Official,
+   Panda, BookieJee (local data + live Pinnacle API) and live libraries
+   (Gutenberg, Open Library, Google Books, Standard Ebooks, Crossref, arXiv,
+   Semantic Scholar, PubMed Central, LibriVox, MangaDex, Jikan).
    ===================================================================== */
 const PinnacleBooks = (() => {
   const API = "https://pinnacleebooks.mikey-nt.workers.dev";
-  const CACHE_KEY = "cx-pinnacle-books-v1";
-  const state = { books: [], loaded: false, loading: false, subject: "all", exam: "all", query: "", chapterReq: 0, currentBook: null, chapters: [] };
+  const GUT = "https://gutendex.com/books";
+  const CXB = window.CXB || { tg: "https://t.me/Cjc65o9aDEEwYWE1", books: [] };
+  const TG = CXB.tg;
+  const PROXY = ""; // optional: your Cloudflare worker, e.g. "https://x.workers.dev/?u=" (see proxy-worker.js)
+  const CACHE_KEY = "cx-pinnacle-books-v2";
+  const PAGE = 48;
+  const ORD = ["JEE", "NEET", "SSC", "UPSC", "BPSC", "Railway", "Banking", "Teaching Exams", "Police & Defence", "State PSC", "UGC NET & PG", "Other Entrance", "Class 9", "Class 10", "Class 11", "Class 12", "Novels & Classics", "Research & Academic", "Audiobooks", "Manga & Comics", "General & Others"];
+  const LIVE_CATS = ["Novels & Classics", "Research & Academic", "Audiobooks", "Manga & Comics"];
+  const NV = LIVE_CATS[0], RA = LIVE_CATS[1], AU = LIVE_CATS[2], MG = LIVE_CATS[3];
+  const PRI = { "Bunny Books": 0, "Pinnacle": 1, "Study Bison": 2, "PrepBooks": 3, "RCXE": 4, "Ebooks Official": 5, "Panda Books": 6, "BookieJee": 7 };
+  const state = { all: [], list: [], seen: new Set(), cat: "All", subject: "", source: "", query: "", shown: PAGE, loaded: false, loading: false, pinErr: false, gutPage: 1, gutEnd: false, gutBusy: false, gutTotal: 0, fed: {}, chapterReq: 0, currentBook: null, chapters: [], qSeq: 0 };
   const chapterCache = new Map();
-
-  // Every request reports *why* it failed (HTTP status, timeout, blocked/offline, bad JSON) so problems are diagnosable on a phone.
   async function request(url, timeout = 15000) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeout);
@@ -1338,7 +1348,6 @@ const PinnacleBooks = (() => {
     }
     throw lastErr || Object.assign(new Error("No data"), { reason: "The server returned no usable data" });
   }
-  const fetchBooks = async () => { const d = await request(`${API}/ebooks`, 20000); return Array.isArray(d) ? d : (Array.isArray(d && d.ebooks) ? d.ebooks : []); };
   const pickList = (d) => Array.isArray(d) ? d : (d && [d.chapters, d.data, d.items, d.result, d.results].find(Array.isArray));
   const fetchChapters = async (bookId) => {
     const id = encodeURIComponent(bookId);
@@ -1364,22 +1373,122 @@ const PinnacleBooks = (() => {
   const safeUrl = (u) => { if (!u || typeof u !== "string") return ""; try { const x = new URL(u, location.href); return /^https?:$/.test(x.protocol) ? x.href : ""; } catch { return ""; } };
   const norm = (v) => String(v == null ? "" : v).toLowerCase();
 
-  function matches(book) {
-    const subj = norm(book.subject), cat = norm(book.category);
-    if (state.subject !== "all") {
-      const want = norm(state.subject);
-      if (!(subj.includes(want) || cat.includes(want))) return false;
+  /* ---------- fetch helpers for the live libraries (direct, then CORS fallbacks) ---------- */
+  async function tryFetch(url, ms, asText) {
+    const chain = [url];
+    if (PROXY) chain.push(PROXY + encodeURIComponent(url));
+    chain.push("https://corsproxy.io/?" + encodeURIComponent(url), "https://api.allorigins.win/raw?url=" + encodeURIComponent(url));
+    for (const u of chain) {
+      const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), ms || 15000);
+      try {
+        const r = await fetch(u, { signal: ctrl.signal });
+        if (!r.ok) continue;
+        const text = await r.text();
+        return asText ? text : JSON.parse(text);
+      } catch (e) { /* try next */ } finally { clearTimeout(timer); }
     }
-    if (state.exam !== "all") {
-      const e = norm(state.exam);
-      const ok = e === "police" ? (cat.includes("police") || subj.includes("police")) : cat.includes(e) || norm(book.examName).includes(e);
-      if (!ok) return false;
+    throw new Error("network");
+  }
+  const jf = (url, ms) => tryFetch(url, ms, false);
+  const xmlf = async (url) => new DOMParser().parseFromString(await tryFetch(url, 15000, true), "text/xml");
+  const strip = (x) => String(x || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 240);
+  const noEmoji = (x) => String(x || "").replace(/[\u{1F000}-\u{1FAFF}\u2190-\u21FF\u2300-\u23FF\u2460-\u27BF\u2900-\u297F\u2B00-\u2BFF\uFE0F\u200D\u20E3]/gu, "").replace(/\s+/g, " ").trim();
+  const au = (a) => (a || []).filter(Boolean).slice(0, 2).join(", ");
+  const g1 = (e, t) => (e.getElementsByTagName(t)[0] || {}).textContent || "";
+  const mk = (u, t, a, c, s, src, img, L, d, x) => { L = (L || []).filter((l) => l && l[1]); return { u, t: noEmoji(t), a: a || "", c, s, src, img: img || "", dl: L[0] ? L[0][1] : "", L, d: strip(d), x: x ? String(x) : "" }; };
+
+  /* ---------- Pinnacle live API ---------- */
+  const fetchBooks = async () => { const d = await request(`${API}/ebooks`, 20000); return Array.isArray(d) ? d : (Array.isArray(d && d.ebooks) ? d.ebooks : []); };
+  const examOf = (b) => {
+    const e = norm(b.category) + " " + norm(b.examName);
+    if (e.includes("police") || e.includes("defence")) return "Police & Defence";
+    return ORD.find((o) => o !== "General & Others" && e.includes(norm(o).split(" ")[0])) || "General & Others";
+  };
+
+  /* ---------- live providers ---------- */
+  const gm = (b) => {
+    const f = b.formats || {};
+    const read = f["text/html"] || f["text/html; charset=utf-8"] || "";
+    const epub = f["application/epub+zip"] || "";
+    return mk("G" + b.id, b.title, ((b.authors || [])[0] || {}).name || "", NV, "Literature", "Project Gutenberg", f["image/jpeg"] || "",
+      [["Read online", read], ["EPUB", epub], ["Kindle", f["application/x-mobipocket-ebook"]], ["Text", f["text/plain; charset=us-ascii"] || f["text/plain; charset=utf-8"]], ["Page", "https://www.gutenberg.org/ebooks/" + b.id]], "", (b.subjects || []).slice(0, 3).join(" "));
+  };
+  const PROV = [
+    { n: "Gutenberg", c: NV, run: async (q, L) => { if (!q) return []; const r = await jf(GUT + "?" + new URLSearchParams({ search: q, languages: L })); state.gutTotal = Math.max(state.gutTotal, r.count || 0); return (r.results || []).map(gm); } },
+    { n: "Open Library", c: NV, run: async (q) => ((await jf("https://openlibrary.org/search.json?" + new URLSearchParams({ q: q || "classic novels", limit: 24, fields: "title,author_name,cover_i,key,first_publish_year,ia" }))).docs || []).map((b) => { const ia = b.ia && b.ia[0]; return mk("O" + b.key, b.title, au(b.author_name), NV, "Literature", "Open Library", b.cover_i ? "https://covers.openlibrary.org/b/id/" + b.cover_i + "-M.jpg" : "", [[ia ? "Read online" : "View", ia ? "https://archive.org/details/" + ia : "https://openlibrary.org" + b.key]], "", b.first_publish_year); }) },
+    { n: "Google Books", c: NV, run: async (q) => ((await jf("https://www.googleapis.com/books/v1/volumes?" + new URLSearchParams({ q: q || "subject:fiction", maxResults: 20 }))).items || []).map((b) => { const v = b.volumeInfo || {}, p = b.accessInfo && b.accessInfo.pdf; return mk("K" + b.id, v.title, au(v.authors), NV, (v.categories || ["Literature"])[0], "Google Books", ((v.imageLinks || {}).thumbnail || "").replace("http:", "https:"), [["View", v.infoLink], p && p.downloadLink ? ["PDF", p.downloadLink] : null], v.description, v.publishedDate); }) },
+    { n: "Standard Ebooks", c: NV, run: async (q) => {
+      const d = await xmlf("https://standardebooks.org/feeds/opds/" + (q ? "all?" + new URLSearchParams({ query: q }) : "new-releases"));
+      const ab = (l) => { const h = l ? l.getAttribute("href") : ""; return h && h[0] === "/" ? "https://standardebooks.org" + h : h; };
+      return [...d.getElementsByTagName("entry")].slice(0, 20).map((e) => { const ls = [...e.getElementsByTagName("link")], ep = ls.find((l) => /epub/.test(l.getAttribute("type") || "")), im = ls.find((l) => /image/.test(l.getAttribute("rel") || "")), al = ls.find((l) => l.getAttribute("rel") === "alternate"); return mk("E" + g1(e, "id"), g1(e, "title"), g1(e.getElementsByTagName("author")[0] || e, "name"), NV, "Literature", "Standard Ebooks", ab(im), [["EPUB", ab(ep)], ["Read online", ab(al)]], g1(e, "summary") || g1(e, "content")); });
+    } },
+    { n: "Crossref", c: RA, run: async (q) => ((await jf("https://api.crossref.org/works?" + new URLSearchParams({ query: q || "textbook", rows: 20, filter: "type:book", select: "title,author,DOI,URL,publisher,abstract" }))).message.items || []).map((b) => mk("C" + b.DOI, (b.title || [])[0], au((b.author || []).map((a) => ((a.given || "") + " " + (a.family || "")).trim())), RA, "Books & Monographs", "Crossref", "", [["View", b.URL]], b.abstract, b.publisher)) },
+    { n: "arXiv", c: RA, run: async (q) => {
+      const d = await xmlf("https://export.arxiv.org/api/query?" + new URLSearchParams({ search_query: "all:" + (q || "science"), max_results: 20 }));
+      return [...d.getElementsByTagName("entry")].map((e) => { const id = g1(e, "id").replace("http:", "https:"), pdf = [...e.getElementsByTagName("link")].find((l) => l.getAttribute("title") === "pdf"); return mk("A" + id, g1(e, "title"), au([...e.getElementsByTagName("name")].map((n) => n.textContent)), RA, "Papers", "arXiv", "", [["PDF", pdf ? pdf.getAttribute("href").replace("http:", "https:") : id.replace("/abs/", "/pdf/")], ["Abstract", id]], g1(e, "summary")); });
+    } },
+    { n: "Semantic Scholar", c: RA, run: async (q) => ((await jf("https://api.semanticscholar.org/graph/v1/paper/search?" + new URLSearchParams({ query: q || "physics", limit: 20, fields: "title,authors,year,openAccessPdf,url,abstract" }))).data || []).map((p) => mk("S" + p.paperId, p.title, au((p.authors || []).map((a) => a.name)), RA, "Papers", "Semantic Scholar", "", [p.openAccessPdf && p.openAccessPdf.url ? ["PDF", p.openAccessPdf.url] : null, ["View", p.url]], p.abstract, p.year)) },
+    { n: "PubMed Central", c: RA, run: async (q) => {
+      const s = await jf("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?" + new URLSearchParams({ db: "pmc", term: q || "biology", retmax: 20, retmode: "json" }));
+      const ids = (s.esearchresult && s.esearchresult.idlist) || [];
+      if (!ids.length) return [];
+      const m = await jf("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?" + new URLSearchParams({ db: "pmc", id: ids.join(","), retmode: "json" }));
+      return ids.map((i) => { const p = (m.result || {})[i] || {}; return mk("M" + i, p.title, au((p.authors || []).map((a) => a.name)), RA, "Medical & Biology", "PubMed Central", "", [["Read", "https://pmc.ncbi.nlm.nih.gov/articles/PMC" + i + "/"]], "", p.pubdate); });
+    } },
+    { n: "LibriVox", c: AU, run: async (q) => ((await jf("https://librivox.org/api/feed/audiobooks?" + new URLSearchParams({ format: "json", limit: 24, ...(q ? { title: "^" + q } : {}) }))).books || []).map((b) => mk("V" + b.id, b.title, au((b.authors || []).map((a) => ((a.first_name || "") + " " + (a.last_name || "")).trim())), AU, "Audiobook", "LibriVox", "", [["Listen", b.url_librivox], ["ZIP (MP3)", b.url_zip_file], ["RSS", b.url_rss]], b.description, ((b.language || "") + " " + (b.totaltime || "")).trim())) },
+    { n: "MangaDex", c: MG, run: async (q) => {
+      const p = new URLSearchParams({ limit: 20 }); if (q) p.append("title", q); else p.append("order[followedCount]", "desc"); p.append("includes[]", "cover_art"); p.append("includes[]", "author");
+      return ((await jf("https://api.mangadex.org/manga?" + p)).data || []).map((m) => { const a = m.attributes, cv = (m.relationships.find((x) => x.type === "cover_art") || {}).attributes, w = (m.relationships.find((x) => x.type === "author") || {}).attributes; return mk("D" + m.id, a.title.en || Object.values(a.title)[0], w && w.name, MG, "Manga", "MangaDex", cv ? "https://uploads.mangadex.org/covers/" + m.id + "/" + cv.fileName + ".256.jpg" : "", [["Read", "https://mangadex.org/title/" + m.id]], (a.description || {}).en, a.year); });
+    } },
+    { n: "Jikan", c: MG, run: async (q) => ((await jf("https://api.jikan.moe/v4/" + (q ? "manga?" + new URLSearchParams({ q, limit: 20 }) : "top/manga?limit=20"))).data || []).map((m) => mk("J" + m.mal_id, m.title, m.authors && m.authors[0] && m.authors[0].name, MG, "Manga", "MyAnimeList", m.images && m.images.jpg && m.images.jpg.image_url, [["View", m.url]], m.synopsis, m.type)) }
+  ];
+
+  /* ---------- store ---------- */
+  function put(b) {
+    if (!b || !b.t || !b.u || state.seen.has(b.u)) return false;
+    state.seen.add(b.u);
+    b.k = norm([b.t, b.a, b.c, b.s, b.src, b.x, b.d].join(" "));
+    b.p = PRI[b.src] == null ? 9 : PRI[b.src];
+    state.all.push(b);
+    return true;
+  }
+  (CXB.books || []).forEach((b, i) => { b.u = "L" + i; put(b); });
+
+  const hue = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360; return h; };
+  const fmt = (n) => Number(n).toLocaleString("en-IN");
+  const groupCount = (key) => state.all.reduce((m, b) => (m[b[key]] = (m[b[key]] || 0) + 1, m), {});
+  const gutOnly = () => state.all.filter((b) => b.src === "Project Gutenberg").length;
+  const totalBooks = () => state.all.length - gutOnly() + Math.max(state.gutTotal, gutOnly());
+
+  /* ---------- filters + chips ---------- */
+  function drawChrome() {
+    const cc = groupCount("c"), jc = groupCount("s"), sc = groupCount("src");
+    const total = totalBooks();
+    const cats = ORD.filter((c) => cc[c] || LIVE_CATS.includes(c));
+    const chips = $("#bookExams");
+    if (chips) {
+      const cnt = (c) => c === NV ? (state.gutTotal ? Math.max(cc[c] || 0, (cc[c] || 0) - gutOnly() + state.gutTotal) : (cc[c] || 0)) : (cc[c] || 0);
+      chips.innerHTML = [["All", total]].concat(cats.map((c) => [c, cnt(c)])).map(([c, n]) => `<button class="exam-tag${c === state.cat ? " active" : ""}" data-exam="${escapeHtml(c)}" type="button">${escapeHtml(c)}${n ? ` <i class="cnt">${fmt(n)}</i>` : ""}</button>`).join("");
     }
+    const subj = $("#bookSubject");
+    if (subj) {
+      subj.innerHTML = '<option value="">All subjects</option>' + Object.entries(jc).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<option value="${escapeHtml(k)}"${k === state.subject ? " selected" : ""}>${escapeHtml(k)} (${fmt(v)})</option>`).join("");
+    }
+    const src = $("#bookSource");
+    if (src) {
+      const names = Object.keys(sc).sort((a, b) => (PRI[a] == null ? 9 : PRI[a]) - (PRI[b] == null ? 9 : PRI[b]) || a.localeCompare(b));
+      src.innerHTML = '<option value="">All sources</option>' + names.map((n) => `<option value="${escapeHtml(n)}"${n === state.source ? " selected" : ""}>${escapeHtml(n)}</option>`).join("");
+    }
+    const stat = $("#bookStats");
+    if (stat) stat.textContent = `${fmt(total)}${state.gutTotal ? "+" : ""} books in ${cats.length} categories`;
+  }
+
+  function matches(b) {
+    if (state.cat !== "All" && b.c !== state.cat) return false;
+    if (state.source && b.src !== state.source) return false;
+    if (state.subject && b.s !== state.subject) return false;
     const q = norm(state.query).trim();
-    if (q) {
-      const hay = [book.title, book.subject, book.category, book.examName, book.search, book.details].map(norm).join(" ");
-      if (!q.split(/\s+/).every((w) => hay.includes(w))) return false;
-    }
+    if (q) { const w = q.split(/\s+/); if (!(w.every((x) => b.k.includes(x)) || (b.qs && b.qs.has(q)))) return false; }
     return true;
   }
 
@@ -1387,70 +1496,159 @@ const PinnacleBooks = (() => {
     return Array.from({ length: n }, () => '<div class="skeleton-card book-skel"><div class="skeleton-thumb"></div><div class="skeleton-body"><div class="skeleton-line" style="width:40%"></div><div class="skeleton-line" style="width:90%"></div><div class="skeleton-line" style="width:70%"></div></div></div>').join("");
   }
 
-  function card(book, index) {
-    const title = escapeHtml(book.title || "Untitled book");
-    const subject = escapeHtml(book.subject || "E-Book");
-    const exam = escapeHtml(book.category || book.examName || "Exam prep");
-    const img = safeUrl(book.image);
+  /* ---------- cards ---------- */
+  function card(b, index) {
+    const title = escapeHtml(b.t), subject = escapeHtml(b.s || "Book");
+    const meta = escapeHtml(b.a || b.c);
+    const img = safeUrl(b.img);
+    const h = hue(b.t);
+    let actions;
+    if (b.pin) actions = `<button class="book-cta" type="button" data-book-id="${escapeHtml(b.u)}" aria-label="View chapters of ${title}">View Chapters</button>`;
+    else if (b.v) actions = `<div class="book-actions"><button class="book-cta" type="button" data-read="${escapeHtml(b.u)}" aria-label="Read ${title}">Read</button><a class="book-cta book-cta-alt" href="${escapeHtml(safeUrl(b.dl) || TG)}" target="_blank" rel="noopener noreferrer" aria-label="Download ${title}">Download</a></div>`;
+    else if (b.live) actions = `<div class="book-actions"><a class="book-cta" href="${escapeHtml(safeUrl(b.dl) || TG)}" target="_blank" rel="noopener noreferrer">${escapeHtml(((b.L && b.L[0] && b.L[0][0]) || "Open"))}</a>${b.L && b.L[1] && safeUrl(b.L[1][1]) ? `<a class="book-cta book-cta-alt" href="${escapeHtml(safeUrl(b.L[1][1]))}" target="_blank" rel="noopener noreferrer">${escapeHtml(b.L[1][0])}</a>` : ""}</div>`;
+    else actions = `<a class="book-cta" href="${escapeHtml(TG)}" target="_blank" rel="noopener noreferrer" aria-label="Download ${title} on Telegram">Download</a>`;
     return `
-      <article class="book-card" style="animation-delay:${Math.min(index, 12) * 0.03}s">
+      <article class="book-card" style="animation-delay:${Math.min(index % PAGE, 12) * 0.03}s">
         <div class="book-cover">
-          <div class="cover-fallback">${title}</div>
+          <div class="cover-fallback" style="background:linear-gradient(160deg,hsla(${h},70%,60%,.26),hsla(${(h + 60) % 360},70%,55%,.1))"><span>${title}</span></div>
           ${img ? `<img src="${escapeHtml(img)}" alt="${title} cover" loading="lazy" referrerpolicy="no-referrer" onload="this.classList.add('loaded');this.previousElementSibling.style.display='none'" onerror="this.remove()">` : ""}
           <span class="subject-badge">${subject}</span>
         </div>
         <div class="book-body">
-          <span class="book-exam">${exam}</span>
+          <span class="book-exam">${meta}</span>
           <h3 class="book-title" title="${title}">${title}</h3>
-          <button class="book-cta" type="button" data-book-id="${escapeHtml(book._id)}" aria-label="View chapters of ${title}">View Chapters
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-          </button>
+          ${actions}
         </div>
       </article>`;
   }
 
-  function render() {
+  /* ---------- render (first page + infinite scroll) ---------- */
+  function refilter(keepShown) {
+    const list = state.all.filter(matches);
+    const so = ($("#bookSort") || {}).value || "rel";
+    if (so === "az") list.sort((a, b) => a.t.localeCompare(b.t));
+    else if (so === "za") list.sort((a, b) => b.t.localeCompare(a.t));
+    else if (so === "cover") list.sort((a, b) => (!!b.img - !!a.img) || a.p - b.p);
+    else list.sort((a, b) => a.p - b.p);
+    state.list = list;
+    if (!keepShown) state.shown = PAGE;
+    draw();
+  }
+  function draw() {
     const grid = $("#bookGrid"), note = $("#bookNote"), clear = $("#bookClear");
     if (!grid) return;
-    const list = state.books.filter(matches);
-    const filtered = state.subject !== "all" || state.exam !== "all" || state.query.trim();
-    note.textContent = list.length ? `Showing ${list.length} of ${state.books.length} e-books.` : "No e-books matched.";
+    const items = state.list.slice(0, state.shown);
+    const filtered = state.cat !== "All" || state.source || state.subject || state.query.trim();
     clear.style.display = filtered ? "inline-flex" : "none";
-    grid.innerHTML = list.length ? list.map(card).join("") : '<div class="books-error"><div>No e-books found. Try another subject, exam or search term.</div></div>';
+    note.textContent = state.list.length ? `Showing ${fmt(items.length)} of ${fmt(state.list.length)} books${state.cat !== "All" ? " in " + state.cat : ""}` : "No books matched.";
+    grid.innerHTML = items.length ? items.map(card).join("") : '<div class="books-error"><div>No books found. Try another category or search term, or ask on Telegram.</div></div>';
+    watchEnd();
+  }
+  function drawMore() {
+    const grid = $("#bookGrid"); if (!grid) return;
+    const from = state.shown, to = Math.min(state.list.length, from + PAGE);
+    if (to <= from) return;
+    grid.insertAdjacentHTML("beforeend", state.list.slice(from, to).map((b, i) => card(b, i)).join(""));
+    state.shown = to;
+    $("#bookNote").textContent = `Showing ${fmt(state.shown)} of ${fmt(state.list.length)} books${state.cat !== "All" ? " in " + state.cat : ""}`;
+  }
+  let io = null;
+  function watchEnd() {
+    const s = $("#bookSentinel"); if (!s || !("IntersectionObserver" in window)) return;
+    if (!io) io = new IntersectionObserver((en) => { if (en.some((e) => e.isIntersecting)) onEnd(); }, { rootMargin: "700px 0px" });
+    io.disconnect(); io.observe(s);
+  }
+  async function onEnd() {
+    if (state.shown < state.list.length) { drawMore(); watchEnd(); return; }
+    // local list finished: pull more from the live libraries automatically
+    if (state.query.trim()) return;
+    const canGut = (!state.source || state.source === "Project Gutenberg") && (state.cat === "All" || state.cat === NV);
+    if (canGut && await gutenbergNext()) { refilter(true); watchEnd(); return; }
+    if (state.cat === "All" && !state.source) LIVE_CATS.forEach((c) => feed(c));
+  }
+  function setStatus(msg) { const el = $("#bookLive"); if (el) el.textContent = msg || ""; }
+
+  /* ---------- live loading ---------- */
+  async function gutenbergNext() {
+    if (state.gutEnd || state.gutBusy) return false;
+    state.gutBusy = true;
+    let added = 0;
+    try {
+      const L = ($("#bookLang") || {}).value || "en";
+      const r = await jf(GUT + "?" + new URLSearchParams({ page: state.gutPage, languages: L }), 20000);
+      state.gutTotal = r.count || state.gutTotal; state.gutEnd = !r.next; state.gutPage++;
+      (r.results || []).forEach((b) => { if (put(gm(b))) added++; });
+    } catch (e) { state.gutEnd = true; setStatus("Gutenberg could not be reached right now. Check your connection."); }
+    state.gutBusy = false; drawChrome();
+    return added > 0;
+  }
+  async function runProviders(q, cats) {
+    const L = ($("#bookLang") || {}).value || "en";
+    const P = PROV.filter((p) => !cats || cats.includes(p.c));
+    const rs = await Promise.allSettled(P.map((p) => Promise.race([p.run(q, L), new Promise((_, j) => setTimeout(() => j(new Error("timeout")), 22000))])));
+    let ok = 0;
+    rs.forEach((r) => {
+      if (r.status !== "fulfilled") return;
+      ok++;
+      (r.value || []).forEach((x) => {
+        if (!x || !x.t || !x.dl) return;
+        x.live = 1;
+        if (state.seen.has(x.u)) { const o = state.all.find((y) => y.u === x.u); if (o && q) (o.qs = o.qs || new Set()).add(norm(q)); return; }
+        if (q) x.qs = new Set([norm(q)]);
+        put(x);
+      });
+    });
+    return { ok, total: P.length };
+  }
+  async function feed(cat) {
+    if (state.fed[cat]) return; state.fed[cat] = 1;
+    setStatus("Loading online libraries…");
+    const r = await runProviders("", [cat]);
+    setStatus(r.ok ? "" : "Online libraries are not reachable right now. Try again in a moment.");
+    drawChrome(); refilter(true);
+  }
+  async function onlineSearch(q) {
+    const seq = ++state.qSeq;
+    setStatus("Searching online libraries…");
+    const r = await runProviders(q);
+    if (seq !== state.qSeq) return;
+    setStatus(r.ok ? "" : "Online libraries are not reachable right now.");
+    drawChrome(); refilter();
   }
 
-  function showError(message) {
-    const grid = $("#bookGrid");
-    $("#bookNote").textContent = "E-Books could not be loaded.";
-    grid.innerHTML = `<div class="books-error"><div>${escapeHtml(message)}</div><button class="btn" id="bookRetry" type="button">Try again</button></div>`;
-    $("#bookRetry")?.addEventListener("click", () => load(true));
+  async function loadPinnacle(force) {
+    state.pinErr = false;
+    let shown = false;
+    if (!force) {
+      try { const c = JSON.parse(sessionStorage.getItem(CACHE_KEY) || "null"); if (Array.isArray(c) && c.length) { addPin(c); shown = true; } } catch (e) {}
+    }
+    try {
+      const fresh = (await fetchBooks()).filter((b) => b && b._id);
+      try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(fresh)); } catch (e) {}
+      addPin(fresh);
+    } catch (error) {
+      console.error("Pinnacle books error:", error);
+      state.pinErr = true;
+      if (!shown) setStatus("Pinnacle books could not be loaded. Tap Refresh to retry.");
+    }
+  }
+  function addPin(list) {
+    let n = 0;
+    list.forEach((x) => { if (put({ u: "P" + x._id, pin: 1, t: noEmoji(x.title || "Untitled book"), a: "", c: examOf(x), s: x.subject || "E-Book", src: "Pinnacle", img: x.image || "", dl: TG, d: strip(x.details), x: ((x.search || "") + " " + (x.category || "")).trim(), _book: x })) n++; });
+    if (n) { drawChrome(); refilter(true); }
   }
 
   async function load(force = false) {
     if (state.loading) return;
     state.loading = true;
     const grid = $("#bookGrid");
-    let shown = false;
-    if (!force) {
-      try {
-        const cached = JSON.parse(sessionStorage.getItem(CACHE_KEY) || "null");
-        if (Array.isArray(cached) && cached.length) { state.books = cached; state.loaded = true; render(); shown = true; }
-      } catch (e) {}
-    }
-    if (!shown) { grid.innerHTML = skeletons(); $("#bookNote").textContent = "Loading e-books…"; }
-    try {
-      const fresh = await fetchBooks();
-      state.books = fresh.filter((b) => b && b._id);
-      state.loaded = true;
-      try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(state.books)); } catch (e) {}
-      render();
-    } catch (error) {
-      console.error("Pinnacle books error:", error);
-      if (!shown) showError(navigator.onLine ? "Couldn't reach the e-book library. Please try again." : "You're offline. Connect to the internet and try again.");
-      showToast("Failed to load e-books. Check your connection.", "error");
-    } finally { state.loading = false; }
+    drawChrome(); refilter();           // local books show immediately
+    loadPinnacle(force).finally(() => { state.loaded = true; });
+    gutenbergNext().then((ok) => { if (ok) refilter(true); });
+    state.loading = false;
   }
 
+  /* ---------- Pinnacle chapters + reader ---------- */
   function chapterRow(ch, i) {
     const no = ch.sequence || i + 1;
     return `<div class="chapter-row" data-chapter-id="${escapeHtml(ch._id)}" style="animation-delay:${Math.min(i, 14) * 0.025}s">
@@ -1470,26 +1668,28 @@ const PinnacleBooks = (() => {
     box.innerHTML = list.length ? list.map((c) => chapterRow(c, state.chapters.indexOf(c))).join("") : `<div class="books-error">${state.chapters.length ? "No chapter matched your search." : "No chapters are available for this book yet."}</div>`;
   }
 
+
   async function openBook(bookId) {
-    const book = state.books.find((b) => b._id === bookId);
-    if (!book) return;
-    state.currentBook = book;
-    const thumb = $("#chaptersThumb"), img = safeUrl(book.image);
+    const item = state.all.find((b) => b.u === bookId);
+    if (!item || !item._book) return;
+    const rawId = item._book._id;
+    state.currentBook = { title: item.t, image: item.img };
+    const thumb = $("#chaptersThumb"), img = safeUrl(item.img);
     thumb.style.display = img ? "" : "none";
     if (img) thumb.src = img;
-    $("#chaptersTitle").textContent = book.title || "Chapters";
-    $("#chaptersBadge").textContent = book.subject || "E-Book";
-    $("#chaptersMeta").textContent = book.category || book.examName || "";
+    $("#chaptersTitle").textContent = item.t || "Chapters";
+    $("#chaptersBadge").textContent = item.s || "E-Book";
+    $("#chaptersMeta").textContent = item.c || "";
     $("#chapterSearch").value = "";
     $("#chapterList").innerHTML = Array.from({ length: 7 }, () => '<div class="chapter-skel"></div>').join("");
     openModal("chaptersModal");
     const req = ++state.chapterReq;
     try {
-      let chapters = chapterCache.get(bookId);
-      if (!chapters) { chapters = await fetchChapters(bookId); chapterCache.set(bookId, chapters); }
+      let chapters = chapterCache.get(rawId);
+      if (!chapters) { chapters = await fetchChapters(rawId); chapterCache.set(rawId, chapters); }
       if (req !== state.chapterReq) return;
       state.chapters = chapters;
-      $("#chaptersMeta").textContent = `${chapters.length} chapter${chapters.length === 1 ? "" : "s"}${book.category ? " · " + book.category : ""}`;
+      $("#chaptersMeta").textContent = `${chapters.length} chapter${chapters.length === 1 ? "" : "s"}${item.c ? " · " + item.c : ""}`;
       renderChapters();
     } catch (error) {
       if (req !== state.chapterReq) return;
@@ -1503,11 +1703,17 @@ const PinnacleBooks = (() => {
 
   const isTouchDevice = () => (window.matchMedia && matchMedia("(pointer: coarse)").matches) || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
-  // In-app reader (same as the darkuniverse one): full-screen frame with the PDF link straight inside it.
+  // Reader frame. Drive links use the Drive preview; phones render PDFs through a document viewer (their iframe can't show a PDF).
+  function embedUrl(url) {
+    const d = /drive\.google\.com\/file\/d\/([^/]+)/.exec(url);
+    if (d) return `https://drive.google.com/file/d/${d[1]}/preview`;
+    if (/docs\.google\.com|drive\.google\.com/.test(url)) return url;
+    return isTouchDevice() ? "https://docs.google.com/viewer?embedded=true&url=" + encodeURIComponent(url) : url;
+  }
   function showInViewer(url, chapter) {
     const frame = $("#pdfFrame"), loading = $("#pdfLoading");
     loading.classList.remove("done");
-    const title = `${state.currentBook && state.currentBook.title ? state.currentBook.title + " — " : ""}${chapter.title || "Chapter"}`;
+    const title = `${state.currentBook && state.currentBook.title ? state.currentBook.title + " — " : ""}${chapter.title || "Chapter"}`.replace(/ — $/, "");
     $("#pdfTitle").textContent = title;
     $("#pdfOpenTab").href = url;
     const fileName = title.replace(/[\\/:*?"<>|]+/g, " ").trim() + ".pdf";
@@ -1523,12 +1729,17 @@ const PinnacleBooks = (() => {
       } catch (err) { window.open(url, "_blank", "noopener,noreferrer"); }
     };
     frame.onload = () => loading.classList.add("done");
-    frame.src = url;
+    frame.src = embedUrl(url);
     setTimeout(() => loading.classList.add("done"), 8000);
     openModal("pdfModal");
   }
+  function readLocal(id) {
+    const b = state.all.find((x) => x.u === id); if (!b) return;
+    const url = safeUrl(b.dl); if (!url) return;
+    state.currentBook = null;
+    showInViewer(url, { title: b.t });
+  }
 
-  // mode "tab": always a new tab. mode "auto": new tab on phones/tablets (they can't render PDFs inside an iframe), in-app viewer on desktop.
   async function openChapter(chapterId, row, mode = "auto") {
     const chapter = state.chapters.find((c) => c._id === chapterId);
     if (!chapter || row.classList.contains("busy")) return;
@@ -1564,29 +1775,36 @@ const PinnacleBooks = (() => {
     }
   }
 
+
   function setup() {
     const search = $("#bookSearch");
-    let t;
-    search?.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => { state.query = search.value; render(); }, 80); });
-    $("#bookSubjects")?.addEventListener("click", (e) => {
-      const b = e.target.closest("[data-subject]"); if (!b) return;
-      state.subject = b.dataset.subject;
-      $$("#bookSubjects .book-chip").forEach((x) => x.classList.toggle("active", x === b));
-      render();
+    let t, t2;
+    search?.addEventListener("input", () => {
+      clearTimeout(t); clearTimeout(t2);
+      t = setTimeout(() => { state.query = search.value; refilter(); }, 80);
+      const q = search.value.trim();
+      if (q.length >= 2) t2 = setTimeout(() => onlineSearch(q), 600); else setStatus("");
     });
     $("#bookExams")?.addEventListener("click", (e) => {
       const b = e.target.closest("[data-exam]"); if (!b) return;
-      state.exam = b.dataset.exam;
+      state.cat = b.dataset.exam;
       $$("#bookExams .exam-tag").forEach((x) => x.classList.toggle("active", x === b));
-      render();
+      refilter();
+      if (LIVE_CATS.includes(state.cat)) feed(state.cat);
     });
+    $("#bookSubject")?.addEventListener("change", (e) => { state.subject = e.target.value; refilter(); });
+    $("#bookSource")?.addEventListener("change", (e) => { state.source = e.target.value; refilter(); });
+    $("#bookSort")?.addEventListener("change", () => refilter());
+    $("#bookLang")?.addEventListener("change", () => { state.gutPage = 1; state.gutEnd = false; const q = state.query.trim(); if (q.length >= 2) onlineSearch(q); else gutenbergNext().then(() => refilter(true)); });
     $("#bookClear")?.addEventListener("click", () => {
-      state.subject = "all"; state.exam = "all"; state.query = ""; search.value = "";
-      $$("#bookSubjects .book-chip").forEach((x) => x.classList.toggle("active", x.dataset.subject === "all"));
-      $$("#bookExams .exam-tag").forEach((x) => x.classList.toggle("active", x.dataset.exam === "all"));
-      render();
+      state.cat = "All"; state.subject = ""; state.source = ""; state.query = ""; search.value = ""; setStatus("");
+      const so = $("#bookSort"); if (so) so.value = "rel";
+      drawChrome(); refilter();
     });
-    $("#bookGrid")?.addEventListener("click", (e) => { const b = e.target.closest("[data-book-id]"); if (b) openBook(b.dataset.bookId); });
+    $("#bookGrid")?.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-book-id]"); if (b) { openBook(b.dataset.bookId); return; }
+      const r = e.target.closest("[data-read]"); if (r) readLocal(r.dataset.read);
+    });
     $("#chapterList")?.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-act]"); if (!btn) return;
       const row = btn.closest("[data-chapter-id]"); if (row) openChapter(row.dataset.chapterId, row, btn.dataset.act);
@@ -1598,9 +1816,11 @@ const PinnacleBooks = (() => {
       const modal = $("#pdfModal");
       if (modal && !modal.classList.contains("visible")) { const f = $("#pdfFrame"); if (f && f.getAttribute("src")) f.removeAttribute("src"); }
     }).observe($("#pdfModal"), { attributes: true, attributeFilter: ["class"] });
+    // books are shown right away, no tap needed
+    load();
   }
 
-  return { setup, ensureLoaded() { if (!state.loaded && !state.loading) load(); } };
+  return { setup, ensureLoaded() { if (!state.loaded && !state.loading) load(); }, refresh() { state.fed = {}; state.gutPage = 1; state.gutEnd = false; loadPinnacle(true).then(() => refilter(true)); } };
 })();
 
 document.addEventListener("DOMContentLoaded", () => {

@@ -552,6 +552,20 @@
     .shortcut-row kbd { padding: 3px 8px; border: 1px solid var(--line-strong); border-radius: 7px; background: rgba(255,255,255,.05); font-size: 11px; font-family: inherit; }
     .footer-link-btn { border: 0; background: none; color: inherit; cursor: pointer; text-decoration: underline; padding: 0; }
 
+    /* Library additions */
+    .books-cats { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; }
+    .books-cats::-webkit-scrollbar { display: none; }
+    .books-cats .exam-tag { flex: 0 0 auto; white-space: nowrap; }
+    .exam-tag .cnt { font-style: normal; opacity: .7; font-size: 11px; margin-left: 5px; font-weight: 600; }
+    .books-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+    .books-filters .sort-select { flex: 1 1 150px; min-width: 0; }
+    #bookLive:empty { display: none; }
+    .book-actions { margin-top: auto; display: flex; gap: 6px; }
+    .book-actions .book-cta { flex: 1; margin-top: 0; text-decoration: none; }
+    a.book-cta { text-decoration: none; }
+    .book-cta-alt { background: rgba(255,255,255,.05); border-color: var(--line-strong); color: var(--text); }
+    .book-cover .cover-fallback span { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+
     /* ---------- Pinnacle E-Books ---------- */
     [hidden] { display: none !important; }
     .books-hero { text-align: center; margin-bottom: 18px; }
@@ -746,32 +760,36 @@
           <a class="quick-action qa-whatsapp" href="https://whatsapp.com/channel/0029VbDI2CGEAKWNSoya5L2w" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.372-.025-.521-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.298-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12.004 2c-5.514 0-9.997 4.483-9.997 9.997 0 1.763.463 3.487 1.343 5.005L2 22l5.116-1.343a9.965 9.965 0 0 0 4.888 1.276h.004c5.514 0 9.997-4.483 9.997-9.997C22.005 6.483 17.522 2 12.004 2zm0 18.174h-.003a8.15 8.15 0 0 1-4.157-1.14l-.298-.176-3.09.81.826-3.011-.194-.309a8.13 8.13 0 0 1-1.253-4.352c0-4.499 3.66-8.159 8.171-8.159 2.183 0 4.234.851 5.777 2.395a8.116 8.116 0 0 1 2.394 5.775c0 4.5-3.66 8.167-8.173 8.167z"/></svg> Join WhatsApp</a>
         </div>
         <div class="books-hero">
-          <span class="section-kicker">Pinnacle Books</span>
-          <p class="books-sub">Chapter-wise PDFs for SSC, Railway &amp; Police exams — read online or download.</p>
+          <span class="section-kicker">E-Books Library</span>
+          <p class="books-sub" id="bookStats">Study books for JEE, NEET, SSC, UPSC, BPSC and more.</p>
         </div>
         <div class="search-box books-search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
-          <input id="bookSearch" type="search" placeholder="Search books by title or subject…" autocomplete="off" aria-label="Search e-books">
+          <input id="bookSearch" type="search" placeholder="Search books by title, author or subject…" autocomplete="off" aria-label="Search books">
         </div>
-        <div class="chip-row books-chips" id="bookSubjects" role="tablist" aria-label="Subjects">
-          <button class="book-chip active" data-subject="all" type="button">All Books</button>
-          <button class="book-chip" data-subject="Maths" type="button">Maths</button>
-          <button class="book-chip" data-subject="Reasoning" type="button">Reasoning</button>
-          <button class="book-chip" data-subject="English" type="button">English</button>
-          <button class="book-chip" data-subject="General Studies" type="button">General Studies</button>
-        </div>
-        <div class="chip-row books-exams" id="bookExams" aria-label="Exam tags">
-          <span class="exam-label">Exam</span>
-          <button class="exam-tag active" data-exam="all" type="button">All</button>
-          <button class="exam-tag" data-exam="SSC" type="button">SSC</button>
-          <button class="exam-tag" data-exam="Railway" type="button">Railway</button>
-          <button class="exam-tag" data-exam="Police" type="button">Police</button>
+        <div class="chip-row books-exams books-cats" id="bookExams" aria-label="Categories"></div>
+        <div class="books-filters">
+          <select class="sort-select" id="bookSubject" aria-label="Filter by subject"><option value="">All subjects</option></select>
+          <select class="sort-select" id="bookSource" aria-label="Filter by source"><option value="">All sources</option></select>
+          <select class="sort-select" id="bookSort" aria-label="Sort books">
+            <option value="rel">Sort: Default</option>
+            <option value="az">Sort: Name A–Z</option>
+            <option value="za">Sort: Name Z–A</option>
+            <option value="cover">Sort: With cover first</option>
+          </select>
+          <select class="sort-select" id="bookLang" aria-label="Online books language">
+            <option value="en">Online books: English</option>
+            <option value="hi">Online books: Hindi</option>
+            <option value="en,hi,fr,de,es">Online books: All</option>
+          </select>
         </div>
         <div class="results-note-row">
-          <div class="results-note" id="bookNote">Loading e-books…</div>
+          <div class="results-note" id="bookNote">Loading books…</div>
           <button class="clear-filters-btn" id="bookClear" type="button" style="display:none;">Clear filters ✕</button>
         </div>
+        <div class="results-note" id="bookLive" aria-live="polite"></div>
         <div class="book-grid" id="bookGrid" aria-live="polite"></div>
+        <div id="bookSentinel" style="height:1px"></div>
       </section>
 
     </div>
@@ -970,7 +988,7 @@
         <div class="pdf-left">
           <button class="pdf-x" data-close="pdfModal" type="button" aria-label="Close Reader" title="Close Reader">✕</button>
           <div class="pdf-head">
-            <h3 class="pdf-title" id="pdfTitle">Pinnacle E-Book Reader</h3>
+            <h3 class="pdf-title" id="pdfTitle">E-Book Reader</h3>
             <p class="pdf-sub">PDF Reader • Pinch or scroll to zoom</p>
           </div>
         </div>
@@ -986,7 +1004,7 @@
     </div>
   </div>
 
+  <script src="books-data.js"></script>
   <script src="app.js"></script>
-  <script src="profile.js" defer></script>
 </body>
 </html>

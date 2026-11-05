@@ -1,5 +1,5 @@
-const CACHE_NAME = "codex-studys-shell-v13d";
-const SHELL_FILES = ["./index.html", "./app.js", "./profile.js", "./manifest.json", "./assets/icon-192.png", "./assets/icon-512.png", "./assets/mj-icon-192.png", "./assets/mj-icon-512.png"];
+const CACHE_NAME = "codex-studys-shell-v14-library";
+const SHELL_FILES = ["./index.html", "./app.js", "./books-data.js", "./manifest.json", "./assets/icon-192.png", "./assets/icon-512.png", "./assets/mj-icon-192.png", "./assets/mj-icon-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -52,7 +52,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Network-first for the app's own scripts so a new deploy is picked up immediately (cache only as offline fallback).
-  if (/\/(app|profile)\.js$/.test(url.pathname)) {
+  if (/\/(app|books-data)\.js$/.test(url.pathname)) {
     event.respondWith(
       fetch(event.request, { cache: "no-cache" })
         .then((response) => {
