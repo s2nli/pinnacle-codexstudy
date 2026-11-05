@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <meta name="theme-color" content="#090b10">
+  <meta name="theme-color" content="#02030a">
   <meta name="description" content="CODEX STUDYS is a smart learning platform for focused preparation, practice and progress.">
   <meta name="keywords" content="CODEX STUDYS, online learning, courses, notes, practice, exam preparation">
   <meta property="og:title" content="CODEX STUDYS — Smart Learning Platform">
@@ -20,9 +20,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="CODEX STUDYS">
-  <link rel="icon" href="assets/mj-icon-192.png">
+  <link rel="icon" href="assets/mj-icon-192.png?v=2">
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="assets/mj-icon-192.png">
+  <link rel="apple-touch-icon" href="assets/mj-icon-192.png?v=2">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -131,7 +131,7 @@
     .brand { display: inline-flex; align-items: center; gap: 11px; font-family: "Space Grotesk", sans-serif; font-weight: 700; letter-spacing: -.03em; }
     .brand-mark {
       width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%;
-      overflow: hidden; box-shadow: 0 8px 22px rgba(139,124,255,.27); border: 2px solid rgba(166,156,255,.5);
+      overflow: hidden; box-shadow: 0 8px 22px rgba(30,140,255,.30); border: 2px solid rgba(56,160,255,.55); background: #02030a;
     }
     .brand-mark img { width: 100%; height: 100%; object-fit: cover; }
     .brand-copy { font-size: 17px; }
@@ -568,6 +568,7 @@
 
     /* ---------- Pinnacle E-Books ---------- */
     [hidden] { display: none !important; }
+    .books-logo { display:block; width:min(340px,86%); height:auto; margin:0 auto 12px; border-radius:16px; box-shadow:0 10px 30px rgba(20,120,255,.25); }
     .books-hero { text-align: center; margin-bottom: 18px; }
     .books-title { margin: 6px 0 8px; }
     .books-sub { margin: 0 auto; max-width: 460px; color: var(--muted); font-size: 13px; }
@@ -671,7 +672,7 @@
 <body>
   <div id="globalPreloader" aria-label="Loading CODEX STUDYS">
     <div class="preloader-brand">
-      <img src="assets/icon-192.png" referrerpolicy="no-referrer" alt="" onerror="this.remove()">
+      <img src="assets/mj-icon-192.png?v=2" referrerpolicy="no-referrer" alt="" onerror="this.remove()">
       <div class="loader"></div>
     </div>
   </div>
@@ -680,7 +681,7 @@
   <header class="topbar">
     <div class="shell nav-row">
       <a class="brand" href="#books" aria-label="CODEX STUDYS home">
-        <span class="brand-mark" id="brandMark"><img src="assets/icon-192.png" referrerpolicy="no-referrer" alt="CODEX STUDYS" onerror="this.remove(); document.getElementById('brandMark').textContent='CØ'; document.getElementById('brandMark').style.cssText='display:grid;place-items:center;background:linear-gradient(140deg,#a69cff,#7060ed);color:#fff;font:700 15px \'Space Grotesk\';letter-spacing:-.08em;'"></span>
+        <span class="brand-mark" id="brandMark"><img src="assets/mj-icon-192.png?v=2" referrerpolicy="no-referrer" alt="CODEX STUDYS" onerror="this.remove(); document.getElementById('brandMark').textContent='CØ'; document.getElementById('brandMark').style.cssText='display:grid;place-items:center;background:linear-gradient(140deg,#a69cff,#7060ed);color:#fff;font:700 15px \'Space Grotesk\';letter-spacing:-.08em;'"></span>
       </a>
       <nav class="nav-links" id="navLinks" aria-label="Primary navigation">
         <a class="nav-link active" href="#books" data-view="books">Home</a>
@@ -760,6 +761,7 @@
           <a class="quick-action qa-whatsapp" href="https://whatsapp.com/channel/0029VbDI2CGEAKWNSoya5L2w" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.372-.025-.521-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.298-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12.004 2c-5.514 0-9.997 4.483-9.997 9.997 0 1.763.463 3.487 1.343 5.005L2 22l5.116-1.343a9.965 9.965 0 0 0 4.888 1.276h.004c5.514 0 9.997-4.483 9.997-9.997C22.005 6.483 17.522 2 12.004 2zm0 18.174h-.003a8.15 8.15 0 0 1-4.157-1.14l-.298-.176-3.09.81.826-3.011-.194-.309a8.13 8.13 0 0 1-1.253-4.352c0-4.499 3.66-8.159 8.171-8.159 2.183 0 4.234.851 5.777 2.395a8.116 8.116 0 0 1 2.394 5.775c0 4.5-3.66 8.167-8.173 8.167z"/></svg> Join WhatsApp</a>
         </div>
         <div class="books-hero">
+          <img class="books-logo" src="assets/books-logo.png?v=2" alt="CodeXStudys Books" width="340" height="191">
           <span class="section-kicker">E-Books Library</span>
           <p class="books-sub" id="bookStats">Study books for JEE, NEET, SSC, UPSC, BPSC and more.</p>
         </div>
@@ -804,7 +806,7 @@
 
   <div class="overlay" id="detailModal" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
     <div class="modal"><button class="close-btn" data-close="detailModal" aria-label="Close details">×</button>
-      <img class="detail-hero" id="detailHero" src="assets/codex-telegram.png" alt="" referrerpolicy="no-referrer">
+      <img class="detail-hero" id="detailHero" src="assets/codex-telegram.png?v=2" alt="" referrerpolicy="no-referrer">
       <h2 class="detail-title" id="detailTitle">Batch</h2>
       <p class="detail-sub" id="detailSub"></p>
       <div class="detail-facts" id="detailFacts"></div>
@@ -836,7 +838,7 @@
   <div class="overlay" id="announceModal" role="dialog" aria-modal="true" aria-labelledby="announceTitle">
     <div class="modal announce-modal">
       <div class="announce-head">
-        <img class="announce-avatar" src="assets/icon-192.png" referrerpolicy="no-referrer" alt="CODEX STUDYS">
+        <img class="announce-avatar" src="assets/mj-icon-192.png?v=2" referrerpolicy="no-referrer" alt="CODEX STUDYS">
         <div class="announce-head-copy">
           <div class="announce-name" id="announceTitle">CODEX STUDYS <svg class="verified-badge" viewBox="0 0 24 24"><path fill="#1d9bf0" d="m12 1.5 2.6 1.9 3.2-.4 1 3.1 2.9 1.5-.9 3.2 1.8 2.7-2.5 2.2.3 3.2-3.2.6-1.6 2.8L12 21.3l-3.2 1L7.2 19.5l-3.2-.6.3-3.2-2.5-2.2 1.8-2.7-.9-3.2 2.9-1.5 1-3.1 3.2.4Z"/><path d="m8.2 12.4 2.7 2.7 4.9-5.4" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
           <div class="announce-sub">Official Announcements</div>
@@ -941,7 +943,7 @@
 
   <div class="overlay" id="installModal" role="dialog" aria-modal="true" aria-labelledby="installTitle">
     <div class="modal"><button class="close-btn" data-close="installModal" aria-label="Close install prompt">×</button>
-      <img class="telegram-logo" src="assets/mj-icon-192.png" alt="CODEX STUDYS">
+      <img class="telegram-logo" src="assets/mj-icon-192.png?v=2" alt="CODEX STUDYS" style="width:56px;height:56px;padding:0;background:#02030a;border:2px solid rgba(56,160,255,.6);box-shadow:0 6px 20px rgba(30,140,255,.35);">
       <h2 id="installTitle">Install CODEX STUDYS 📲</h2>
       <p id="installBody">Add CODEX STUDYS to your home screen for a faster, app-like experience — works offline too.</p>
       <div class="modal-actions">
@@ -957,7 +959,7 @@
   </div>
 
   <div class="overlay" id="telegramModal" role="dialog" aria-modal="true" aria-labelledby="telegramTitle">
-    <div class="modal"><button class="close-btn" data-close="telegramModal" aria-label="Close popup">×</button><img class="telegram-logo" src="assets/icon-192.png" referrerpolicy="no-referrer" alt="CODEX STUDYS"><h2 id="telegramTitle">Join Our Community 🚀</h2><p>Stay updated with the latest materials, notes, PDFs and important updates.</p><div class="modal-actions"><a class="btn btn-telegram" href="https://t.me/s/codexstudys" target="_blank" rel="noopener" id="joinFromModal">
+    <div class="modal"><button class="close-btn" data-close="telegramModal" aria-label="Close popup">×</button><img class="telegram-logo" src="assets/icon-192.png?v=2" referrerpolicy="no-referrer" alt="CODEX STUDYS"><h2 id="telegramTitle">Join Our Community 🚀</h2><p>Stay updated with the latest materials, notes, PDFs and important updates.</p><div class="modal-actions"><a class="btn btn-telegram" href="https://t.me/s/codexstudys" target="_blank" rel="noopener" id="joinFromModal">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="m21.6 4.7-2.8 13.4c-.2.95-.77 1.18-1.56.74l-4.3-3.17-2.07 1.99c-.23.23-.42.42-.86.42l.31-4.39 7.99-7.22c.35-.31-.08-.48-.54-.17L8 12.55 3.79 11.2c-.92-.29-.94-.92.2-1.36L20.46 3.4c.78-.29 1.46.17 1.14 1.3Z"/></svg> Join Telegram</a><a class="btn btn-whatsapp" href="https://whatsapp.com/channel/0029VbDI2CGEAKWNSoya5L2w" target="_blank" rel="noopener" id="joinWhatsappFromModal">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.372-.025-.521-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.298-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12.004 2c-5.514 0-9.997 4.483-9.997 9.997 0 1.763.463 3.487 1.343 5.005L2 22l5.116-1.343a9.965 9.965 0 0 0 4.888 1.276h.004c5.514 0 9.997-4.483 9.997-9.997C22.005 6.483 17.522 2 12.004 2zm0 18.174h-.003a8.15 8.15 0 0 1-4.157-1.14l-.298-.176-3.09.81.826-3.011-.194-.309a8.13 8.13 0 0 1-1.253-4.352c0-4.499 3.66-8.159 8.171-8.159 2.183 0 4.234.851 5.777 2.395a8.116 8.116 0 0 1 2.394 5.775c0 4.5-3.66 8.167-8.173 8.167z"/></svg> Join WhatsApp Channel</a></div><button class="text-link" type="button" data-snooze-popups style="display:block;margin:14px auto 0;text-align:center;">Don't show again for 24 hrs</button>
     </div>
